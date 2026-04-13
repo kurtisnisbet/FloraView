@@ -1,0 +1,18 @@
+{
+  "Dry_Clover_g": {
+    "val_root_mean_squared_error": 0.6118912100791931,
+    "training_time": 587.3501272201538
+  },
+  "Dry_Dead_g": {
+    "val_root_mean_squared_error": 0.6481361985206604,
+    "training_time": 772.6662621498108
+  },
+  "Dry_Green_g": {
+    "val_root_mean_squared_error": 0.5205102562904358,
+    "training_time": 786.7624378204346
+  },
+  "GDM_g": {
+    "val_root_mean_squared_error": 0.5136554837226868,
+    "training_time": 717.0443570613861
+  }
+}
