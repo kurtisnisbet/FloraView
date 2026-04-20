@@ -40,13 +40,19 @@ The raw data consists of per-species rows that were pivoted to a wide format (on
 
 ### Target distributions
 
-Targets are heavily right-skewed with zero inflation — many observations have zero clover or dead material. A log1p transform is applied before training.
+Targets are heavily right-skewed with zero inflation with many observations have zero clover or dead material. A log1p transform is applied before training.
 
 ![Target distributions (raw)](assets/eda_target_distributions_raw.png)
 
 ![Target distributions (log-transformed)](assets/eda_target_distributions_log.png)
 
 ### Feature correlations
+
+The strongest relationships in the dataset are between Dry_Green_g and GDM_g (r=0.88), which is expected since green biomass is the dominant component of total green dry matter. Height_Ave_cm correlates moderately with Dry_Green_g (r=0.65), and GDM_g (r=0.58), confirming height is a useful proxy for live biomass yield. 
+
+Dry_Dead_g is largely independent of all other features (r = 0.10), consistent with its poor model performance. This may be due to confounding variables, such as impacts by weather history, or grazing management rather than visual and structural features available in the dataset. 
+
+Dry_Clover_g shows a mild negative correlation with Dry_Green_g (r = -0.28), suggesting clover-dominant paddocks tend to have less overall green biomass.
 
 ![Correlation matrix](assets/eda_correlation_matrix.png)
 
@@ -56,7 +62,7 @@ Targets are heavily right-skewed with zero inflation — many observations have 
 
 ### Model
 
-[AutoGluon MultiModalPredictor](https://auto.gluon.ai/stable/tutorials/multimodal/index.html) is used for all targets. It fuses image and tabular features in a late-fusion MLP architecture — a pretrained vision encoder processes the image, a separate branch handles tabular features, and both representations are concatenated before the final regression head.
+[AutoGluon MultiModalPredictor](https://auto.gluon.ai/stable/tutorials/multimodal/index.html) is used for all targets. It fuses image and tabular features in a late-fusion MLP architecture, a pretrained vision encoder processes the image, a separate branch handles tabular features, and both representations are concatenated before the final regression head.
 
 A separate predictor is trained per target. AutoGluon does not natively support multi-output regression, so this is the recommended approach.
 
@@ -70,7 +76,7 @@ A separate predictor is trained per target. AutoGluon does not natively support 
 
 ### Infrastructure
 
-Training was run on Azure ML using a Tesla T4 GPU cluster (`Standard_NC4as_T4_v3`), providing approximately 35× speedup over local CPU. MLflow was used for experiment tracking and run comparison.
+Training was run on Azure ML using a Tesla T4 GPU cluster (`Standard_NC4as_T4_v3`), providing speedup over local CPU. MLflow was used for experiment tracking and run comparison.
 
 ---
 
@@ -123,6 +129,16 @@ Total biomass (sum of all four predicted targets) vs actual.
 - **GDM_g** (total green dry matter) is the most predictable target (R²=0.73–0.83), which is the metric most relevant to practical farm management
 - **Dry_Dead_g** is the hardest target (R²=0.28–0.43) — dead biomass has limited visual distinction from soil and varies with weather history
 - The model beats a naive mean-prediction baseline on all four targets across all backbones
+
+## Summary
+
+Pasture biomass is a critical metric for livestock farm management, but is costly to measure manually.
+
+This project built a multi-modal deep learning pipeline which predicts dry biomass yield across four metrics, i.e. clover, dead material, live green, and total green dry matter.
+
+This model uses smartphone photogrpahs for pasture, combined with tabular field measurements, i.e. NDVI, sward height, species composition, and geographic metadata, using  AutoGluon's image and tabular features in a late-fusion architecture, and trained on Azure ML GPU infrastructure with MLFlow experiment tracking.
+
+The best-performing configuration achieves an R² of 0.83 on total green dry matter, and a 0.73 on live green biomass, with cross-validation confirming stable generalisations across data splits.
 
 ---
 
