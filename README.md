@@ -1,8 +1,16 @@
 # image2biomass
 
+
+
 Predicting pasture biomass from field photographs using multi-modal deep learning.
 
 ---
+
+<div align="center">
+  <img src="./assets/banner.jpg" alt="pasture-land" style="width:50%;"/>
+</div>
+
+*Image: [USDA Climate Hubs](https://www.climatehubs.usda.gov/hubs/international/topic/virtual-fencing-climate-adaptation-strategy)*
 
 ## Overview
 
@@ -30,21 +38,49 @@ The raw data consists of per-species rows that were pivoted to a wide format (on
 
 ### Sample images
 
-![Sample pasture images](assets/eda_sample_images.png)
+The dataset for this project contains close-range photographs of pasture taken at ground level, ranging from dense green clover to dead-material dominant images.
+
+This visual heterogeneity is both the core challange and motivation for the multi-modal approach used in this project.
+
+<div align="center">
+  <img src="assets/eda_sample_images.png" alt="eda_sample_images";"/>
+</div>
 
 ### Species and geographic distribution
 
-![Species distribution](assets/eda_species_distribution.png)
+The dataset spans 14 pasture species.
 
-![State and season distribution](assets/eda_state_season_heatmap.png)
+Ryegrass is the most frequently observed, followed by Mixed and Phalaris, with some rare species. 
+
+This imbalance has has implications for model performance i.e. the model sees relatively few examples of minority species during training, meaning predictions for paddocks dominated by rare species are likely less reliable, and may explain why Dry-Cover_g was harder to predict than GDM_g, as clover-dominant observations were underrepresented in training.
+
+To account for this, during feature engineering, species were one-hot encoded from the original long-form data to allow rare species to contribute on the few positive examples across the dataset.
+
+<div align="center">
+  <img src="assets/eda_species_distribution.png" alt="species_distribution" style="width:50%;"/>
+</div>
+
+Samples are drawn from five Australian states, with NSW and Tas being the most heavily represented. The heatmap shows most observations fall in Spring and Autumn, with limited coverage in Winter.
+
+State and seasons were included as features during engineering, however with thin representation for some state-season combinations, these features may not generalise well due to unseen combinations.
+
+This introduces potential geographic and seasonal bias, where the model underperforms on paddocks from undersampled states or seasons and should be treated with caution.
+
+<div align="center">
+  <img src="assets/eda_state_season_heatmap.png" alt="eda_state_season_heatmap" style="width:50%;"/>
+</div>
 
 ### Target distributions
 
 Targets are heavily right-skewed with zero inflation with many observations have zero clover or dead material. A log1p transform is applied before training.
 
-![Target distributions (raw)](assets/eda_target_distributions_raw.png)
+<div align="center">
+  <img src="assets/eda_target_distributions_raw.png" alt="eda_target_distributions_raw";"/>
+</div>
 
-![Target distributions (log-transformed)](assets/eda_target_distributions_log.png)
+<div align="center">
+  <img src="assets/eda_target_distributions_log.png" alt="eda_target_distributions_log";"/>
+</div>
 
 ### Feature correlations
 
@@ -54,7 +90,9 @@ Dry_Dead_g is largely independent of all other features (r = 0.10), consistent w
 
 Dry_Clover_g shows a mild negative correlation with Dry_Green_g (r = -0.28), suggesting clover-dominant paddocks tend to have less overall green biomass.
 
-![Correlation matrix](assets/eda_correlation_matrix.png)
+<div align="center">
+  <img src="assets/eda_correlation_matrix.png" alt="eda_correlation_matrix" style="width:65%;"/>
+</div>
 
 ---
 
@@ -86,7 +124,11 @@ Training was run on Azure ML using a Tesla T4 GPU cluster (`Standard_NC4as_T4_v3
 
 Three architectures were compared on the same 80/20 train/val split.
 
-![Backbone comparison](assets/backbone_comparison.png)
+<div align="center">
+  <img src="./assets/backbone_comparison.png" alt="cv_results";"/>
+</div>
+
+The default AutoGluon backbone performs best overall, particularly on GDM_g and Dry_Green_g. Swin-Base outperforms on the harder, low-signal targets (Dry_Clover_g and Dry_Dead_g).
 
 | Target | Default | Swin-Base | EfficientNet-B4 |
 |---|---|---|---|
@@ -95,11 +137,14 @@ Three architectures were compared on the same 80/20 train/val split.
 | Dry_Green_g | **0.726** | 0.626 | 0.614 |
 | GDM_g | **0.825** | 0.808 | 0.516 |
 
-The default AutoGluon backbone performs best overall, particularly on GDM_g and Dry_Green_g. Swin-Base outperforms on the harder, low-signal targets (Dry_Clover_g and Dry_Dead_g).
 
 ### 5-Fold cross-validation
 
-![CV results](assets/cv_results.png)
+<div align="center">
+  <img src="./assets/cv_results.png" alt="cv_results";"/>
+</div>
+
+The low std on GDM_g and Dry_Green_g confirms these predictions are stable across different data splits. The higher std on Dry_Dead_g reflects the difficulty of that target — dead material has weak visual and tabular signal.
 
 | Target | R² mean | R² std |
 |---|---|---|
@@ -108,21 +153,44 @@ The default AutoGluon backbone performs best overall, particularly on GDM_g and 
 | Dry_Green_g | 0.695 | ± 0.059 |
 | GDM_g | 0.726 | ± 0.036 |
 
-The low std on GDM_g and Dry_Green_g confirms these predictions are stable across different data splits. The higher std on Dry_Dead_g reflects the difficulty of that target — dead material has weak visual and tabular signal.
 
 ### Predicted vs actual
 
-![Predicted vs actual](assets/pred_vs_actual.png)
+GDM_g and Dry_Green_g show the tightest clustering around the perfect prediction line, consistent with their stronger tabular signal (height and NDVI) identified during EDA. 
+
+Dry_Dead_g predictions are notably scattered, reflecting its near-zero correlation with all available features, so our feature engineering could not compensate for the absence of meaningful signal.
+
+Dry_Clover_g performs moderately, though its spread is partly attributable to the species imbalance identified earlier.
+
+<div align="center">
+  <img src="./assets/pred_vs_actual.png" alt="pred_vs_actual";"/>
+</div>
 
 ### Residuals
 
-![Residuals](assets/residuals.png)
+Residuals for GDM_g and Dry_Green_g are reasonably centred around zero, suggesting the model is well-calibrated for these targets. 
+
+Dry_Dead_g shows the most erratic residual pattern, reinforcing that the model struggles to distinguish systematic error from noise for this target. 
+
+A consistent pattern of underprediction at high biomass values is visible across all targets, a known limitation when training on small, right-skewed distributions where extreme values are underrepresented even after log1p transformation.
+
+<div align="center">
+  <img src="./assets/residuals.png" alt="residuals";"/>
+</div>
 
 ### Total biomass
 
 Total biomass (sum of all four predicted targets) vs actual.
 
-![Total biomass](assets/total_biomass.png)
+By summing predictions across all four targets, we can see the model tracks total biomass reasonably well despite the weak performance on individual components like Dry_Dead_g. 
+
+This suggests errors partially cancel out across targets where one component is overpredicted, another tends to be underpredicted, buffering the overall estimate. 
+
+The tightest predictions cluster at lower total biomass values, where the training data is most dense, while higher-biomass observations show greater spread — a direct consequence of the right-skewed distributions identified during EDA and the limited number of high-yield examples available for training.
+
+<div align="center">
+  <img src="assets/total_biomass.png" alt="total_biomass" style="width:65%;"/>
+</div>
 
 ### Interpretation
 
