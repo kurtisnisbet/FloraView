@@ -1,4 +1,8 @@
-# image2biomass
+# FloraView
+
+**Live demo:** https://huggingface.co/spaces/kurtisnisbet/FloraView
+
+This is a two-part project: **Part 1 (Modelling)** below, and **Part 2 (Deployment)** further down ([jump to Part 2](#part-2-deployment)).
 
 
 
@@ -16,6 +20,10 @@ Predicting pasture biomass from field photographs using multi-modal deep learnin
 
 Pasture biomass measurement is critical for livestock farm management but is expensive and time-consuming when done manually. This project builds a machine learning pipeline that predicts dry biomass yield (in grams) from smartphone images of pasture combined with tabular field measurements.
 
+This tool allows scientists and landowners to estimate their above ground biomass without the requirement of collecting samples, and performing lab analyses themselves, or paying for someone else to do the analyses.
+
+The deployed model, outlined in Part 2, is designed to be fast and simple to use in the field with a smartphone, only requiring a clear picture and measurement of the average plant height.
+
 The model is trained on the CSIRO Pasture Biomass dataset and predicts four biomass components simultaneously:
 
 | Target | Description |
@@ -30,7 +38,7 @@ The model is trained on the CSIRO Pasture Biomass dataset and predicts four biom
 ## Dataset
 
 - **Source:** CSIRO Pasture Biomass dataset
-- **Samples:** 357 field observations across multiple Australian states (NSW, VIC, TAS, SA, WA)
+- **Samples:** 357 field observations across four Australian states (NSW, Vic, Tas, WA)
 - **Inputs:** Pasture photograph + tabular features
 - **Tabular features:** NDVI (Pre_GSHH_NDVI), average sward height (Height_Ave_cm), Australian state, month, season, and one-hot encoded species presence (14 pasture species including Ryegrass, Clover, Phalaris, SubClover, and others)
 
@@ -60,7 +68,7 @@ To account for this, during feature engineering, species were one-hot encoded fr
   <img src="assets/eda_species_distribution.png" alt="species_distribution" style="width:50%;"/>
 </div>
 
-Samples are drawn from five Australian states, with NSW and Tas being the most heavily represented. The heatmap shows most observations fall in Spring and Autumn, with limited coverage in Winter.
+Samples are drawn from four Australian states, with Tas and Vic being the most heavily represented. The heatmap shows most observations fall in Spring and Autumn, with limited coverage in Winter.
 
 State and seasons were included as features during engineering, however with thin representation for some state-season combinations, these features may not generalise well due to unseen combinations.
 
@@ -204,16 +212,54 @@ Pasture biomass is a critical metric for livestock farm management, but is costl
 
 This project built a multi-modal deep learning pipeline which predicts dry biomass yield across four metrics, i.e. clover, dead material, live green, and total green dry matter.
 
-This model uses smartphone photogrpahs for pasture, combined with tabular field measurements, i.e. NDVI, sward height, species composition, and geographic metadata, using  AutoGluon's image and tabular features in a late-fusion architecture, and trained on Azure ML GPU infrastructure with MLFlow experiment tracking.
+This model is designed to be used in the field, using photographs of the pasture, combined with  field measurements, plant height, species presence, and geographic metadata, using  AutoGluon's image and tabular features in a late-fusion architecture, and trained on Azure ML GPU infrastructure with MLFlow experiment tracking.
 
 The best-performing configuration achieves an R² of 0.83 on total green dry matter, and a 0.73 on live green biomass, with cross-validation confirming stable generalisations across data splits.
+
+---
+
+## Part 2: Deployment
+
+With the models trained and evaluated, the second phase packages them into a live, web application that predicts biomass directly from an uploaded photo. **Try it here:** https://huggingface.co/spaces/kurtisnisbet/FloraView
+
+### Inference pipeline (`src/predict.py`)
+
+A standalone module loads the per-target AutoGluon predictors and runs the full prediction path: log1p inputs → `predict` → `expm1` → clip negatives to zero (biomass cannot be negative). Predictions use AutoGluon's `realtime=True` inference path, which performs a lightweight forward pass instead of spinning up a full PyTorch Lightning trainer for every request, i.e. effectively reducing single-image latency to less than 3 seconds.
+
+### Web app (`app.py`, Gradio)
+
+The model is wrapped in a [Gradio](https://www.gradio.app/) interface so it can be used from a browser with no code. The user uploads a pasture photo and enters a few field details (state, month, average plant height, and any known species); the app assembles a model-ready row, defaulting NDVI and imputing a typical ryegrass/clover if the species species was not provided by the user, and returns the predicted biomass. Note, the month is mapped to the (southern-hemisphere) season automatically, and a per-session history table records each prediction made during a visit.
+
+### Containerisation (Docker)
+
+The app is packaged with Docker for reproducibility. Rather than the full training environment, the image is built from a slim `requirements-inference.txt` containing only what inference needs (`autogluon.multimodal`, `torch`, `gradio` and their dependencies), using the CPU-only PyTorch build to keep the image lean. A `.dockerignore` excludes data, secrets, notebooks, and unused models from the build context.
+
+### Hosting (HuggingFace Spaces)
+
+The container is deployed to a free HuggingFace Space, which builds the Docker image and serves it on CPU hardware. The model checkpoints (hundreds of MB each) are stored via Git LFS.
+
+### Key deployment decisions
+
+A decision needed to be made regarding the trade-off between model performance and size. Notably, the space cap for the free repository on HuggingFace is at 1 GB, but the four model checkpoints total ~1.5 GB. The demo therefore ships only the two most valuable and accurate models of GDM (total green dry matter) and Clover — both combined at ~0.78 GB. Because `GDM = Dry_Green + Dry_Clover`, green grass biomass is able to be derived for free as `GDM − clover`, so the demo still reports green, clover, and total living biomass from just two models, while staying under the 1 GB limit. Dead biomass — the weakest target (R² ≈ 0.28), is unfortuantely omitted from the hosted demo, however it remains available in the full model set.
+
+### Running the demo
+
+```bash
+# Locally (Python 3.11)
+pip install -r requirements-inference.txt
+python app.py            # serves at http://localhost:7860
+
+# With Docker
+docker build -t floraview .
+docker run -p 7860:7860 floraview
+```
 
 ---
 
 ## Project structure
 
 ```
-image2biomass/
+FloraView/
 ├── assets/                    # plots and figures for this README
 ├── data/
 │   ├── raw/                   # CSIRO pasture images + train.csv (not tracked in git)
@@ -230,8 +276,13 @@ image2biomass/
 │   └── 05_evaluation.ipynb    # results analysis, backbone comparison, CV summary
 ├── results/                   # downloaded Azure ML output CSVs and plots
 ├── src/
-│   └── train.py               # training script (runs on Azure ML GPU cluster)
-├── requirements.txt
+│   ├── train.py               # training script (runs on Azure ML GPU cluster)
+│   └── predict.py             # inference pipeline used by the demo app (Part 2)
+├── app.py                     # Gradio web app (Part 2)
+├── Dockerfile                 # container build for deployment
+├── .dockerignore
+├── requirements.txt           # full training environment
+├── requirements-inference.txt # slim dependencies for the demo image
 └── .env                       # Azure credentials — not committed to git
 ```
 
@@ -248,8 +299,8 @@ image2biomass/
 ### Setup
 
 ```bash
-git clone https://github.com/<your-username>/image2biomass.git
-cd image2biomass
+git clone https://github.com/kurtisnisbet/FloraView.git
+cd FloraView
 py -3.11 -m venv .venv
 .venv\Scripts\activate          # Windows
 pip install -r requirements.txt
@@ -292,11 +343,11 @@ Run notebooks in order from `notebooks/`:
 
 - **Dataset size:** 357 samples is small for deep learning. Collecting additional labelled images, particularly for underrepresented species and seasons, would likely improve all targets.
 - **Dry_Dead_g ceiling:** Dead biomass prediction appears near its ceiling with current inputs. Additional features such as time-since-rain or spectral indices may help.
-- **Deployment:** The trained models are not yet deployed. A natural next step is a simple inference API or mobile-friendly interface that accepts a photo and returns biomass predictions.
+- **Deployment:** A live demo is now available (see [Part 2](#part-2-deployment)). Further work includes fitting all four models within the hosting storage limit (e.g. by compressing checkpoints) and reducing CPU inference latency.
 - **Temporal generalisation:** The current train/val split does not account for temporal structure. A time-based split would give a stricter estimate of out-of-sample performance.
 
 ---
 
 ## Technologies
 
-Python · AutoGluon · PyTorch · Azure ML · MLflow · scikit-learn · pandas · matplotlib
+Python · AutoGluon · PyTorch · Azure ML · MLflow · scikit-learn · pandas · matplotlib · Gradio · Docker · HuggingFace Spaces · Git LFS
