@@ -25,7 +25,7 @@ The model is trained on the CSIRO Pasture Biomass dataset and predicts four biom
 | `Dry_Green_g` | Dry green (live) biomass |
 | `GDM_g` | Total green dry matter |
 
-**Headline result:** R² of 0.83 on total green dry matter (the metric farmers care most about), validated with 5-fold cross-validation, and deployed as a sub-3-second inference app on HuggingFace Spaces.
+**Result:** R² of 0.83 on total green dry matter (the metric farmers care most about), validated with 5-fold cross-validation, and deployed as a sub-3-second inference app on HuggingFace Spaces.
 
 ---
 
