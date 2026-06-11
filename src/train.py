@@ -1,23 +1,27 @@
 """
 train.py -- AutoGluon MultiModalPredictor training script for Azure ML.
 
-This script is the cloud equivalent of 03_modelling.ipynb. It is submitted as
-an Azure ML command job via 04_azure_ml_job.ipynb, which passes arguments via
+This script is the cloud equivalent of the 03_modelling.ipynb file. It is submitted as
+an Azure ML command job from 04_azure_ml_job.ipynb, which passes arguments via
 argparse.
 
 Key design decisions:
 - One predictor is trained per target (4 total). AutoGluon MultiModalPredictor
-  does not natively support multi-output regression, so this is the supported
+  does not natively support multi-output regression, so this was the supported
   approach.
-- Targets are log1p-transformed before training to compress right skew and
-  handle zero inflation found during EDA. A copy of the original (untransformed)
-  DataFrame is kept for computing metrics in the original grams scale.
-- The backbone (image encoder) is configurable via --backbone. Passing None
+
+- Targets are log1p-transformed before training to compress the right skew and
+  handle zero inflation found during 01_eda. A copy of the original and untransformed
+  DataFrame is kept for computing metrics in the original grams scale in 05_evaluation.
+
+- The backbone model is configurable via --backbone. Passing None
   uses AutoGluon's default. Named timm backbones can be specified to run
   architecture comparison experiments.
+
 - Cross-validation is supported via --n_folds. When n_folds > 1, the dataset
   is split into k folds and one predictor is trained per fold per target.
   Per-fold and aggregate (mean +/- std) metrics are logged to MLflow.
+
 - All outputs are saved to outputs/ which Azure ML captures to cloud storage.
 """
 
@@ -47,15 +51,15 @@ from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.model_selection import KFold, train_test_split
 
 
-# ---------------------------------------------------------------------------
-# 1. Parse arguments
-# ---------------------------------------------------------------------------
+# Parse arguments
 parser = argparse.ArgumentParser()
 parser.add_argument(
     "--data_path",
     type=str,
     help="Path to the mounted data directory (set by Azure ML at runtime).",
 )
+
+# Time limit in seconds
 parser.add_argument(
     "--time_limit",
     type=int,
@@ -63,6 +67,8 @@ parser.add_argument(
     help="Seconds AutoGluon is allowed to train per target (or per fold-target "
          "when using cross-validation). Default: 14400 (4 hours).",
 )
+
+# Using the default backbone, as determined by AutoGluon based on dataset size properties.
 parser.add_argument(
     "--backbone",
     type=str,
@@ -70,6 +76,8 @@ parser.add_argument(
     help="timm checkpoint name for the image encoder (e.g. "
          "'swin_base_patch4_window7_224'). None = AutoGluon default.",
 )
+
+# Number of cross-validation folds.
 parser.add_argument(
     "--n_folds",
     type=int,
@@ -80,17 +88,13 @@ parser.add_argument(
 args = parser.parse_args()
 
 
-# ---------------------------------------------------------------------------
-# 2. Constants
-# ---------------------------------------------------------------------------
+# Constants
 TARGETS     = ["Dry_Clover_g", "Dry_Dead_g", "Dry_Green_g", "GDM_g"]
 RANDOM_SEED = 42
 VAL_SIZE    = 0.2
 
 
-# ---------------------------------------------------------------------------
-# 3. Load data and resolve image paths
-# ---------------------------------------------------------------------------
+# Load data and resolve image paths
 data_path = Path(args.data_path)
 
 df = pd.read_csv(data_path / "processed" / "df_model.csv")
@@ -101,8 +105,7 @@ df["image_path"] = df["image_path"].apply(
     lambda x: str(data_path / "raw" / x)
 )
 
-# Fail fast if any images are missing rather than silently training on a
-# broken dataset.
+# Fail fast if any images are missing rather than silently training on a broken dataset.
 missing = [p for p in df["image_path"] if not Path(p).exists()]
 if missing:
     raise FileNotFoundError(
@@ -111,29 +114,22 @@ if missing:
 print(f"Loaded {len(df)} samples. All images verified.")
 
 
-# ---------------------------------------------------------------------------
-# 4. Log-transform targets
+# Log-transform targets
 # Keep df_original (untransformed) for computing metrics in grams.
-# log1p(x) = log(x + 1) -- safe for zeros, reverses with expm1.
-# ---------------------------------------------------------------------------
 df_original = df.copy()
 for target in TARGETS:
     df[target] = np.log1p(df[target])
 
 
-# ---------------------------------------------------------------------------
-# 5. Build AutoGluon hyperparameters dict
+# Build AutoGluon hyperparameters dict
 # Only populated when a specific backbone is requested. When empty,
 # AutoGluon uses its own default architecture selection.
-# ---------------------------------------------------------------------------
 hyperparameters = {}
 if args.backbone:
     hyperparameters["model.timm_image.checkpoint_name"] = args.backbone
 
 
-# ---------------------------------------------------------------------------
-# 6. MLflow setup
-# ---------------------------------------------------------------------------
+# MLflow setup
 mlflow.autolog()
 mlflow.log_params({
     "backbone"                : args.backbone or "autogluon_default",
@@ -148,12 +144,9 @@ timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 Path("outputs").mkdir(exist_ok=True)
 
 
-# ---------------------------------------------------------------------------
-# 7. Helper -- train and evaluate one predictor per target
+# Helper to train and evaluate one predictor per target
 # Accepts log-transformed train/val DataFrames and the original-scale val
-# DataFrame for metric computation. fold_label is appended to output paths
-# to avoid collisions across folds.
-# ---------------------------------------------------------------------------
+# DataFrame for metric computation. 
 def train_and_evaluate(df_train, df_val_log, df_val_orig, fold_label=""):
     """Train one MultiModalPredictor per target and return results."""
     predictors = {}
@@ -186,9 +179,7 @@ def train_and_evaluate(df_train, df_val_log, df_val_orig, fold_label=""):
     return predictors, results
 
 
-# ---------------------------------------------------------------------------
-# 8a. Standard train/val split (n_folds == 1)
-# ---------------------------------------------------------------------------
+# Standard train/val split (n_folds == 1)
 if args.n_folds == 1:
 
     df_train, df_val = train_test_split(
@@ -220,11 +211,9 @@ if args.n_folds == 1:
     print(f"\nSaved results_{timestamp}.csv and fit_summary_{timestamp}.json to outputs/")
 
 
-# ---------------------------------------------------------------------------
-# 8b. K-fold cross-validation (n_folds > 1)
+# K-fold cross-validation (n_folds > 1)
 # One predictor is trained per fold per target. Per-fold metrics are logged
 # individually to MLflow, and aggregate mean +/- std are logged as summaries.
-# ---------------------------------------------------------------------------
 else:
 
     kf = KFold(n_splits=args.n_folds, shuffle=True, random_state=RANDOM_SEED)

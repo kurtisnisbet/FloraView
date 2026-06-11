@@ -1,0 +1,23 @@
+# Python environment & caches
+.venv/
+__pycache__/
+*.pyc
+
+# Secrets
+.env
+
+# Raw data (size + CSIRO licensing) and trained model weights
+# (large; the models are served by the live HuggingFace demo)
+data/raw/
+models/
+
+# Internal / working files not part of the public project
+HANDOVER.md
+requirements
+huggingface_space_README.md
+
+# Redundant working copy (the README now lives at the repo root)
+github README/
+
+# OS
+.DS_Store

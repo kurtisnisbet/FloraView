@@ -1,0 +1,5 @@
+image_file,target,predicted_g,actual_g
+train/ID1011485656.jpg,Dry_Clover_g,0.0917,0.0
+train/ID1011485656.jpg,Dry_Dead_g,34.8575,31.9984
+train/ID1011485656.jpg,Dry_Green_g,21.9164,16.2751
+train/ID1011485656.jpg,GDM_g,15.7706,16.275

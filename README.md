@@ -7,7 +7,7 @@ Predicting pasture biomass from field photographs using multi-modal deep learnin
 This project covers the full machine learning lifecycle in two parts: **Part 1 (Modelling)**, from EDA through cloud GPU training and evaluation, and **Part 2 (Deployment)**, packaging the trained models into a live containerised web app ([jump to Part 2](#part-2-deployment)).
 
 <div align="center">
-  <img src="./assets/banner.jpg" alt="pasture-land" style="width:50%;"/>
+  <img src="./assets/pasture-land.jpg" alt="pasture-land" style="width:50%;"/>
 </div>
 
 *Image: [USDA Climate Hubs](https://www.climatehubs.usda.gov/hubs/international/topic/virtual-fencing-climate-adaptation-strategy)*
@@ -25,7 +25,7 @@ The model is trained on the CSIRO Pasture Biomass dataset and predicts four biom
 | `Dry_Green_g` | Dry green (live) biomass |
 | `GDM_g` | Total green dry matter |
 
-**Result:** R² of 0.83 on total green dry matter (the metric farmers care most about), validated with 5-fold cross-validation, and deployed as a sub-3-second inference app on HuggingFace Spaces.
+**Headline result:** R² of 0.83 on total green dry matter (the metric farmers care most about), validated with 5-fold cross-validation, and deployed as a sub-3-second inference app on HuggingFace Spaces.
 
 ---
 
@@ -92,7 +92,7 @@ Dry_Dead_g is largely independent of every other feature (r ≈ 0.10), an early 
 
 [AutoGluon MultiModalPredictor](https://auto.gluon.ai/stable/tutorials/multimodal/index.html) is used for all targets. It fuses image and tabular features in a late-fusion MLP architecture: a pretrained vision encoder processes the image, a separate branch handles tabular features, and the two representations are concatenated before the regression head.
 
-A separate predictor is trained per target. AutoGluon does not natively support multi-output regression, and per-target models also make it possible to ship only the strongest models at deployment time (see [Key deployment decisions](#key-deployment-decisions)).
+A separate predictor is trained per target. AutoGluon does not natively support multi-output regression, and per-target models also make it possible to ship only the strongest models at deployment time (which mattered, see [Key deployment decisions](#key-deployment-decisions)).
 
 ### Key design decisions
 
@@ -284,7 +284,7 @@ Run notebooks in order from `notebooks/`:
 4. `04_azure_ml_job.ipynb`: submit training jobs to Azure ML
 5. `05_evaluation.ipynb`: analyse results
 
-> **Note:** Raw image data is not included in this repository due to size. Access data from [Kaggle](https://www.kaggle.com/competitions/csiro-biomass/data).
+> **Note:** Raw image data is not included in this repository due to size. Contact CSIRO for dataset access.
 
 ### Training script arguments
 

@@ -1,0 +1,14 @@
+.venv/
+.git/
+.gitignore
+__pycache__/
+.env
+assets/
+data/
+notebooks/
+results/*
+!results/app_predictions_log.csv
+HANDOVER.md
+README.md
+models/autogluon_*
+github README/

@@ -1,0 +1,36 @@
+# requirements-inference.txt
+# Slim dependency set for INFERENCE + demo only.
+#
+# Why this exists:
+#   requirements.txt is a full `pip freeze` of the training venv (~300 packages,
+#   incl. the Azure SDK, Ray, SpaCy, dev tooling, Windows-only wheels). It is far
+#   too large and not portable enough for a Docker image or HuggingFace Space.
+#
+# Key slimming decision:
+#   We depend on `autogluon.multimodal` ONLY -- not the full `autogluon`
+#   meta-package. The full package pulls in the tabular + timeseries AutoML
+#   stacks (Ray, LightGBM, CatBoost, XGBoost, etc.) that this project never uses
+#   at predict time. autogluon.multimodal still installs torch, transformers,
+#   timm and lightning automatically.
+#
+# Versions are pinned to EXACTLY what the models were trained with. Pickled
+# objects inside the model folders (df_preprocessor.pkl, data_processors.pkl)
+# can fail to load if scikit-learn / torch versions drift, so do not loosen
+# these without re-testing model loading.
+#
+# Python 3.11 is required (AutoGluon 1.5.0 does not support 3.12+).
+
+# --- core inference dependency (pulls torch stack, transformers, timm, lightning) ---
+autogluon.multimodal==1.5.0
+
+# --- pin the ML stack to the trained versions for checkpoint/pickle compatibility ---
+torch==2.9.1
+torchvision==0.24.1
+timm==1.0.3
+numpy==2.1.3
+pandas==2.3.3
+scikit-learn==1.7.2
+pillow==11.3.0
+
+# --- demo UI ---
+gradio>=4.44,<6
